@@ -15,8 +15,9 @@ const
 	
 // =================================Declare Global Variables Here ========================================== //
 var 
-	tlFiles, validPlugins, tlSigsToLoad, fltrAlchemyKeywords, fltrAllowArmourRaces: TStringList;
+	tlFiles, validPlugins, tlSigsToLoad, fltrAlchemyKeywords, fltrAlchemyStrings, fltrAlchemyStringsAllow, fltrAllowArmourRaces: TStringList;
 	i: integer;
+	sHeader: string;
 
 // ======================================== Main Function =============================================== //
 
@@ -24,6 +25,7 @@ function Initialize: Integer;
 var
 	j: integer;
 	rec, f, g: IInterface;
+	aRecord: IInterface;
 	sFiles: string;
 begin
 	DefaultOptionsMXPF;
@@ -33,36 +35,44 @@ begin
 	mxSkipPatchedRecords := true;
 	mxLoadWinningOverrides := true;
 	
-	// Creates various lists which are used by the script
+	// Creates various lists which are used by the script.
 	CreateLists;
 	
-	// Filters only plugins with relevant records (defined by tlSigsToLoad) 
+	// Filters only plugins with relevant records (defined by tlSigsToLoad).
 	validPlugins := TStringList.Create;
 	FilterValidPlugins;
 	
-	// Show form to select which plugins to patch
+	// Show form to select which plugins to patch.
 	ShowPluginSelect;
 	sFiles := tlFiles.CommaText;
 	
-	// Load all records
+	// Load all records.
 	SetInclusions(sFiles);
 	LoadAllRecords;
 	
+	// Abort if no records were found.
+	if (MaxRecordIndex = -1) then begin
+		ShowMessage('No Relevant Records Found');
+		exit;
+	end;
+	
+	// Process the records, filtering + patching.
 	ProcessRecords;
 	
+	// Copy the records to patch file.
 	ClearPatch;
 	CopyRecordsToPatch;
 	
+	// Finalizing Scripts and Tidy up.
 	PrintMXPFReport;
 	FinalizeMXPF;
-	//ShowMessage('Patching Complete');
 end;
 
 // ==================================== Pre-Processing Functions =========================================
 procedure FilterValidPlugins();
 var
 	f, g: IInterface;
-	j, n:    integer;
+	j, n: integer;
 begin
 	for j := 0  to FileCount - 2 do begin
 		f := FileByLoadOrder(j);
@@ -84,16 +94,16 @@ procedure CreateLists();
 begin
 	tlSigsToLoad := TStringList.Create;
 		//tlSigsToLoad.Add('WEAP');
-		tlSigsToLoad.Add('ARMO');
+		//tlSigsToLoad.Add('ARMO');
 		//tlSigsToLoad.Add('AMMO');
-		//tlSigsToLoad.Add('ALCH');
+		tlSigsToLoad.Add('ALCH');
 		//tlSigsToLoad.Add('BOOK');
 		//tlSigsToLoad.Add('NOTE');
 		//tlSigsToLoad.Add('KEYM');
 		//tlSigsToLoad.Add('MISC');
 		
 	fltrAlchemyKeywords := TStringList.Create;
-		fltrAlchemyKeywords.Add('HC_EffectType_Sleep');
+		fltrAlchemyKeywords.Add('HC_IconColor_Red');
 		fltrAlchemyKeywords.Add('HC_Eff3ype_Sleep');
 	
 	fltrAllowArmourRaces := TStringList.Create;
@@ -101,6 +111,14 @@ begin
 		fltrAllowArmourRaces.add('SuperMutantRace');
 		//fltrAllowArmourRaces.add('HumanChildRace "Human"');
 		fltrAllowArmourRaces.add('HumanRace "Human"');
+		
+	fltrAlchemyStrings := TStringList.Create;
+		fltrAlchemyStrings.Add('HC_');
+		fltrAlchemyStrings.Add('DLC04GZVaultTec_Experiment');
+	
+	fltrAlchemyStringsAllow := TStringList.Create;
+		fltrAlchemyStringsAllow.Add('HC_Herbal');
+		fltrAlchemyStringsAllow.Add('HC_Antibiotics')
 end;
 
 procedure LoadAllRecords();
@@ -121,13 +139,12 @@ begin
 		RemoveNode(GroupBySignature(mxPatchFile, tlSigsToLoad[j]));
 	end;
 end;
-// ===================================== Processing Functions ============================================ //
+// ===================================== Main Processing Procedure ============================================ //
 
 procedure ProcessRecords();
 var
 	j: integer;
 	rec: IInterface;
-	sHeader: string;
 begin
 	// Filter Records
 	for i := MaxRecordIndex downto 0 do begin
@@ -141,35 +158,32 @@ begin
 		
 		if (sHeader = 'WEAP') then begin
 			FilterWeapon(rec);
-			continue;
 		end else if (sHeader = 'ARMO') then begin
 			FilterArmour(rec);
+		end else if (sHeader = 'AMMO') then begin
+			FilterAmmo(rec);
+		end else if (sHeader = 'ALCH') then begin
+			FilterAlchemy(rec);
 		end;
 	end;
 end;
+
+// ===================================== Filter Functions ============================================ //
 
 procedure FilterWeapon(e: IInterface);
 begin
 	// Checks for Non Playable Tag
 	if (GetElementEditValues(e, 'DNAM - Data\Flags\Not Playable') = '1') then begin
-		if blDebug then AddMessage(Format('[GS] - Filtered %s for having Not Playable tag', [Name(e)]));
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having Non Playable tag', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
 	end;
 	// Checks if weapon has model 
 	if not (HasModel(e)) then begin
-		if blDebug then AddMessage(Format('[GS] - Filtered %s for having no model.', [Name(e)]));
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having no model', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
 	end;		
-end;
-
-procedure ProcessWeapon(e: IInterface);
-var
-	f: IInterface;
-begin
-	//AddTag(f, '[WEAPON]', 'FULL - Full Name');	
-	AddMessage(Name(e));
 end;
 
 procedure FilterArmour(e: IInterface);
@@ -178,18 +192,58 @@ var
 begin
 	sRace := GetElementEditValueTrimmed(e, 'RNAM - Race');
 	// Removes non-playable human armour
-	if (sRace = 'HumanRace "Human"') and (GetElementEditValues(e, 'Record Header\Record Flags\Non-Playable') = '1') then begin
-		if blDebug then AddMessage(Format('[GS] - Filtered %s for being Human Non-Playable.', [Name(e)]));
+	if (sRace = 'HumanRace "Human"') and (IsNonPlayable(e)) then begin
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for being Human + Non Playable', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
+	// Removes armour for races not defined in list
 	end else if (fltrAllowArmourRaces.IndexOf(sRace) = -1) then begin
-		if blDebug then AddMessage(Format('[GS] - Filtered %s for not being human/dogmeat/supermutant', [Name(e)]));
-		RemoveRecord(i)
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for not being allowed race', [sHeader, Name(e)]));
+		RemoveRecord(i);
+		exit;
 	end;
-	
 end;
 
+procedure FilterAmmo(e: IInterface);
+begin
+	// Removes Non-Playable ammo
+	if (IsNonPlayable(e)) then begin
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having Non Playable tag', [sHeader, Name(e)]));
+		RemoveRecord(i);
+		exit;
+	end;
+end;
 
+procedure FilterAlchemy(e: IInterface);
+begin
+	// Might want to disable this if it removes script chems
+	if not (HasModel(e)) then begin
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having no model', [sHeader, Name(e)]));
+		RemoveRecord(i);
+		exit;
+	end;
+	// Removes Non-Playable ammo
+	if (HasKeywordFromList(e, fltrAlchemyKeywords)) then begin
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for HC Keyword', [sHeader, Name(e)]));
+		RemoveRecord(i);
+		exit;
+	end;
+	// Has 2 sets of SubStr to check, 1 for allow, 1 for disallow.
+	if (ElementContainsStrFromList(e, 'EDID - Editor ID', fltrAlchemyStrings)) and not (ElementContainsStrFromList(e, 'EDID - Editor ID', fltrAlchemyStringsAllow)) then begin
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s based on excl/incl lists', [sHeader, Name(e)]));
+		RemoveRecord(i);
+		exit;
+	end;
+end;
+// ===================================== Patch Functions ============================================ //
+
+procedure PatchWeapon(e: IInterface);
+var
+	f: IInterface;
+begin
+	//AddTag(f, '[WEAPON]', 'FULL - Full Name');	
+	AddMessage(Name(e));
+end;
 // ======================================= Helper Functions ============================================== //
 procedure AddTag(e: IInterface; sTag, sPath: string);
 var
@@ -203,6 +257,13 @@ end;
 procedure DeleteTags(s: string);
 begin
 	exit;
+end;
+
+// Check if a record has non playable record header tag.
+function IsNonPlayable(e: IInterface): boolean;
+begin
+	Result := false;
+	if (GetElementEditValues(e, 'Record Header\Record Flags\Non-Playable') = '1') then Result := true;
 end;
 // Check if a record has a model (MODL - Model Filename).
 function HasModel(e: IInterface): boolean;
@@ -244,7 +305,7 @@ begin
 	end;
 end;
 
-// Checks if a record has a certain effect 
+// Checks if a record has a certain effect.
 function HasEffect(e: IInterface; edid: String): boolean;
 var
 	effects, effect: IInterface;
@@ -268,6 +329,26 @@ begin
 	sVal := GetElementEditValues(e, sPath);
 	Result := Copy(sVal, 1, (Pos('[', sVal) - 2));
 end; 
+
+function ElementContainsStr(e: IInterface; sPath, sStr: string): boolean;
+begin
+	Result := false;	
+	if (Pos(sStr, geev(e, sPath)) > 0) then
+		Result := true;
+end;
+
+function ElementContainsStrFromList(e: IInterface; sPath: string; tlStrs: TStringList): boolean;
+var
+	j: integer;
+begin
+	Result := false;	
+	for j := 0 to tlStrs.Count -1 do begin
+		if (ElementContainsStr(e, sPath, tlStrs[j])) then begin
+			Result := true;
+			exit;
+		end;
+	end;
+end;
 
 // ======================================= GUI  ============================================== //
 
