@@ -1,19 +1,21 @@
-
+{
+	Hotkey: Ctrl+E
+}
 
 unit UserScript;
 uses 'lib\mxpf';
 
 // ==================================== Declare Constants Here ========================================== //
 const
-	blDebug     	  		= false;
+	blDebug     	  		= true;
 	blIgnoreBethesda  		= false;
 	blDefaultPluginState	= true;
 	// 
 	excludeEsps       		= 'Fallout4.esm'#13'DLCCoast.esm'#13'DLCNukaWorld.esm'#13'DLCRobot.esm'#13'DLCworkshop01.esm'#13'DLCworkshop02.esm'#13'DLCworkshop03.esm';	
 	
-// ==================================== Declare Variables Here ========================================== //
+// =================================Declare Global Variables Here ========================================== //
 var 
-	tlFiles, validPlugins, tlSigsToLoad, kywdFilterAlch: TStringList;
+	tlFiles, validPlugins, tlSigsToLoad, fltrAlchemyKeywords, fltrAllowArmourRaces: TStringList;
 	i: integer;
 
 // ======================================== Main Function =============================================== //
@@ -48,6 +50,9 @@ begin
 	
 	ProcessRecords;
 	
+	ClearPatch;
+	CopyRecordsToPatch;
+	
 	PrintMXPFReport;
 	FinalizeMXPF;
 	//ShowMessage('Patching Complete');
@@ -65,8 +70,8 @@ begin
 			continue;
 		for n := 0 to tlSigsToLoad.Count - 1 do begin
 			g := GroupBySignature(f, tlSigsToLoad[n]);
-			if blDebug then
-				AddMessage(Format('[1N] %s : %s : %s', [GetFileName(f), tlSigsToLoad[n],IntToStr(ElementCount(g))]));
+			//if blDebug then
+			//	AddMessage(Format('[1N] %s : %s : %s', [GetFileName(f), tlSigsToLoad[n],IntToStr(ElementCount(g))]));
 			if ElementCount(g) > 0 then begin
 				validPlugins.Add(GetFileName(f));
 				break;
@@ -77,19 +82,25 @@ end;
 
 procedure CreateLists();
 begin
-	kywdFilterAlch := TStringList.Create;
-		kywdFilterAlch.Add('HC_EffectType_Sleep');
-		kywdFilterAlch.Add('HC_Eff3ype_Sleep');
-		
 	tlSigsToLoad := TStringList.Create;
-		tlSigsToLoad.Add('WEAP');
+		//tlSigsToLoad.Add('WEAP');
 		tlSigsToLoad.Add('ARMO');
-		tlSigsToLoad.Add('AMMO');
-		tlSigsToLoad.Add('ALCH');
-		tlSigsToLoad.Add('BOOK');
-		tlSigsToLoad.Add('NOTE');
-		tlSigsToLoad.Add('KEYM');
-		tlSigsToLoad.Add('MISC');
+		//tlSigsToLoad.Add('AMMO');
+		//tlSigsToLoad.Add('ALCH');
+		//tlSigsToLoad.Add('BOOK');
+		//tlSigsToLoad.Add('NOTE');
+		//tlSigsToLoad.Add('KEYM');
+		//tlSigsToLoad.Add('MISC');
+		
+	fltrAlchemyKeywords := TStringList.Create;
+		fltrAlchemyKeywords.Add('HC_EffectType_Sleep');
+		fltrAlchemyKeywords.Add('HC_Eff3ype_Sleep');
+	
+	fltrAllowArmourRaces := TStringList.Create;
+		fltrAllowArmourRaces.add('DogmeatRace');
+		fltrAllowArmourRaces.add('SuperMutantRace');
+		//fltrAllowArmourRaces.add('HumanChildRace "Human"');
+		fltrAllowArmourRaces.add('HumanRace "Human"');
 end;
 
 procedure LoadAllRecords();
@@ -101,6 +112,15 @@ begin
 	end;
 end;
 
+
+procedure ClearPatch();
+var 
+	j: integer;
+begin
+	for j := 0 to tlSigsToLoad.Count - 1 do begin
+		RemoveNode(GroupBySignature(mxPatchFile, tlSigsToLoad[j]));
+	end;
+end;
 // ===================================== Processing Functions ============================================ //
 
 procedure ProcessRecords();
@@ -113,30 +133,81 @@ begin
 	for i := MaxRecordIndex downto 0 do begin
 		rec := GetRecord(i);
 		if not HasName(rec) then begin
-			AddMessage(Format('[GS] - Filtered %s for having null name.', [Name(rec)]));
+			//AddMessage(Format('[GS] - Filtered %s for having null name.', [Name(rec)]));
 			RemoveRecord(i);
 			continue;
 		end;
 		sHeader := GetElementEditValues(rec, 'Record Header\Signature');
 		
-		if sHeader = 'WEAP' then begin
+		if (sHeader = 'WEAP') then begin
 			FilterWeapon(rec);
+			continue;
+		end else if (sHeader = 'ARMO') then begin
+			FilterArmour(rec);
 		end;
 	end;
 end;
 
 procedure FilterWeapon(e: IInterface);
 begin
-	AddMessage('1');
+	// Checks for Non Playable Tag
+	if (GetElementEditValues(e, 'DNAM - Data\Flags\Not Playable') = '1') then begin
+		if blDebug then AddMessage(Format('[GS] - Filtered %s for having Not Playable tag', [Name(e)]));
+		RemoveRecord(i);
+		exit;
+	end;
+	// Checks if weapon has model 
+	if not (HasModel(e)) then begin
+		if blDebug then AddMessage(Format('[GS] - Filtered %s for having no model.', [Name(e)]));
+		RemoveRecord(i);
+		exit;
+	end;		
+end;
+
+procedure ProcessWeapon(e: IInterface);
+var
+	f: IInterface;
+begin
+	//AddTag(f, '[WEAPON]', 'FULL - Full Name');	
+	AddMessage(Name(e));
+end;
+
+procedure FilterArmour(e: IInterface);
+var
+	sRace: string;
+begin
+	sRace := GetElementEditValueTrimmed(e, 'RNAM - Race');
+	// Removes non-playable human armour
+	if (sRace = 'HumanRace "Human"') and (GetElementEditValues(e, 'Record Header\Record Flags\Non-Playable') = '1') then begin
+		if blDebug then AddMessage(Format('[GS] - Filtered %s for being Human Non-Playable.', [Name(e)]));
+		RemoveRecord(i);
+		exit;
+	end else if (fltrAllowArmourRaces.IndexOf(sRace) = -1) then begin
+		if blDebug then AddMessage(Format('[GS] - Filtered %s for not being human/dogmeat/supermutant', [Name(e)]));
+		RemoveRecord(i)
+	end;
+	
 end;
 
 
 // ======================================= Helper Functions ============================================== //
+procedure AddTag(e: IInterface; sTag, sPath: string);
+var
+	sCur: string;
+begin
+	sCur := GetElementEditValues(e, sPath);
+	//DeleteTags;
+	SetElementEditValues(e, sPath, (sTag + ' ' + sCur));
+end;
 
+procedure DeleteTags(s: string);
+begin
+	exit;
+end;
 // Check if a record has a model (MODL - Model Filename).
 function HasModel(e: IInterface): boolean;
 begin
-	Result := true;
+	Result := Assigned(geev(e, 'Model\MODL - Model FileName'))
 end;
 
 // Check if a record has a name (either null or blank).
@@ -189,7 +260,14 @@ begin
 		end;
 	end;
 end;
- 
+
+function GetElementEditValueTrimmed(e: IInterface; sPath: string): string;
+var
+	sVal: string;
+begin 
+	sVal := GetElementEditValues(e, sPath);
+	Result := Copy(sVal, 1, (Pos('[', sVal) - 2));
+end; 
 
 // ======================================= GUI  ============================================== //
 
