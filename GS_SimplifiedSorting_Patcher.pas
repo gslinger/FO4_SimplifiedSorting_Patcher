@@ -12,17 +12,38 @@ const
 	blDebug     	  		= true;
 	blIgnoreBethesda  		= false;
 	blDefaultPluginState	= true;
-	blDeleteTags            = false;
+	blDeleteTags            = true;
 	excludeEsps       		= 'Fallout4.esm'#13'DLCCoast.esm'#13'DLCNukaWorld.esm'#13'DLCRobot.esm'#13'DLCworkshop01.esm'#13'DLCworkshop02.esm'#13'DLCworkshop03.esm';	
 	sAuthor                 = 'GS_SS_Patcher';
 		
 	{ Tag Variables - Will probably add to file }
+	tGrenade                = '[W9GND]';  // Has Grenade Anim Type 
 	tUtilGrenade            = '[W9SIG]';  // Has Grenade Anim Type + A Substr from tlWeaponSignalGrenadeStrings
-	tTraps                  = '[W9TRP]';  // Has Grenade Anim Type + A Substr from tlWeaponTrapStrings
-	tGrenade                = '[W9GND]';  // Has Grenade Anim Type  (leftovers from above)
-	tMine             		= '[W9MNE]';          
+	tMine             		= '[W9MNE]';  // Has Mine Anim Type 
+	tTraps                  = '[W9TRP]';  // Has Mine Anim Type + A Substr from tlWeaponTrapStrings
+	tSuperMutantArmour      = '[A6SMU]';  // Has SuperMutant Race 
+	tDogArmour              = '[A7DOG]';  // Has Dogmeat Race
+	tAmmo                   = '[W1AMM]';  // Has Signature 'AMMO' 
+	tFusionCore             = '[W1FSC]';  // Has Signature 'AMMO' + Keyword isPowerArmorBattery
+	tStimpack               = '[STIMPACK]';
+	tAid                    = '[AID]';
+	tRadiationAid           = '[RADIATIONAID]';
+	tCleanWater             = '[CLEANWATER]';
+	tBloodpack              = '[BLOODPACK]';
+	tDevice                 = '[DEVICES]'; // Has Model (Stealthboy01.nif) 
+	tChem                   = '[CHEM]';
+	tDrink                  = '[DRINK]';
+	tNukaCola               = '[NUKACOLA]';
+	tAlcohol                = '[ALCOHOL]';
+	tSurvivalFood           = '[SURVIVAL FOOD]';
+	tBuffFood               = '[BUFFFOOD]';
+	tRadFood                = '[RADFOOD]';
+	tMeat                   = '[MEAT]';
+	tCrops                  = '[CROPS]';
+	tWildPlants             = '[WILD PLANTS]';
+	
 var 
-	tlFiles, validPlugins, tlSigsToLoad, tlWeaponTrapStrings, tlWeaponSignalGrenadeStrings, fltrAlchemyKeywords, fltrAlchemyStrings, tlWeaponAnimMelee, fltrAlchemyStringsAllow, fltrAllowArmourRaces, fltrWeaponStrings: TStringList;
+	tlFiles, validPlugins, tlAlchemyCleanWaterKeywords, tlAlchemyAidSounds, tlAlchemyDeviceStrings, tlCraftingIngredients, tlSigsToLoad, tlAlchemyRadiationAidEffects, tlWeaponTrapStrings, tlWeaponSignalGrenadeStrings, fltrAlchemyKeywords, fltrAlchemyStrings, tlWeaponAnimMelee, fltrAlchemyStringsAllow, fltrAllowArmourRaces, fltrWeaponStrings: TStringList;
 	i: integer;
 	sHeader, sTag: string;
 
@@ -67,6 +88,15 @@ begin
 		exit;
 	end;
 	
+	{
+	tlCraftingIngredients := TStringList.Create;
+	tlCraftingIngredients := GetCraftingIngredients();
+	
+	for j := 0 to tlCraftingIngredients.Count - 1 do begin
+		AddMessage(tlCraftingIngredients[j]);
+	end;
+	}
+	
 	{ Process and Patch the records. }
 	ProcessRecords;
 	
@@ -109,14 +139,14 @@ end;
 procedure CreateLists();
 begin
 	tlSigsToLoad := TStringList.Create;
-		tlSigsToLoad.Add('WEAP');
+		//tlSigsToLoad.Add('WEAP');
 		//tlSigsToLoad.Add('ARMO');
 		//tlSigsToLoad.Add('AMMO');
-		//tlSigsToLoad.Add('ALCH');
+		tlSigsToLoad.Add('ALCH');
 		//tlSigsToLoad.Add('BOOK');
 		//tlSigsToLoad.Add('NOTE');
 		//tlSigsToLoad.Add('KEYM');
-		tlSigsToLoad.Add('MISC');
+		//tlSigsToLoad.Add('MISC');
 		
 	fltrAlchemyKeywords := TStringList.Create;
 		fltrAlchemyKeywords.Add('HC_IconColor_Red');
@@ -161,6 +191,24 @@ begin
 	tlWeaponTrapStrings := TStringList.Create;
 		tlWeaponTrapStrings.Add('Trap');
 		tlWeaponTrapStrings.Add('Caltrop');
+		
+	tlAlchemyRadiationAidEffects := TStringList.Create;
+		tlAlchemyRadiationAidEffects.Add('FortifyResistRadsRadX');
+		tlAlchemyRadiationAidEffects.Add('RestoreRadsChem');
+		
+	tlAlchemyDeviceStrings := TStringList.Create;
+		tlAlchemyDeviceStrings.Add('Settings');
+		tlAlchemyDeviceStrings.Add('Uninstall');
+		tlAlchemyDeviceStrings.Add(' List');
+		tlAlchemyDeviceStrings.Add('Repair');
+	
+	tlAlchemyAidSounds := TStringList.Create;
+		tlAlchemyAidSounds.Add('NPCHumanEatSoupSlurp');
+		tlAlchemyAidSounds.Add('NPCHumanChemsAddictol');
+		
+	tlAlchemyCleanWaterKeywords := TStringList.Create;
+		tlAlchemyCleanWaterKeywords.Add('AnimFurnWater');
+		tlAlchemyCleanWaterKeywords.Add('ObjectTypeWater');
 end;
 
 { Loads all records with a signature defined in tlSigsToLoad. }
@@ -181,6 +229,30 @@ begin
 	for j := 0 to tlSigsToLoad.Count - 1 do begin
 		RemoveNode(GroupBySignature(mxPatchFile, tlSigsToLoad[j]));
 	end;
+end;
+
+{ Checks every COBJ for its components and creates a non-duplicate list }
+function GetCraftingIngredients(): TStringList;
+var
+	j, k, l: integer;
+	f, gCobj, eComponentGroup, eRecord, eComponentRow, eComponent: IInterface;
+begin
+	Result := TStringList.Create;
+	Result.Duplicates := dupIgnore;
+	Result.Sorted := true;
+	for j := 0 to FileCount - 2 do begin
+		f := FileByIndex(j);
+		gCobj := GroupBySignature(f, 'COBJ');
+		for k := 0 to ElementCount(gCobj) do begin
+			eRecord := WinningOverride(ElementByIndex(gCobj, k));
+			eComponentGroup := ElementBySignature(eRecord, 'FVPA');
+			for l := 0 to ElementCount(eComponentGroup) - 1 do begin
+				eComponentRow := ElementByIndex(eComponentGroup, l);
+				eComponent := WinningOverride(LinksTo(ElementByName(eComponentRow, 'Component')));
+				Result.Add(Name(eComponent));
+			end;
+		end;
+	end;	
 end;
 
 {===================================================================================================================}
@@ -227,12 +299,15 @@ begin
 		sHeader := GetElementEditValues(rec, 'Record Header\Signature');
 		if (sHeader = 'WEAP') then begin
 			PatchWeapon(rec);
+		end else if (sHeader = 'ARMO') then begin
+			PatchArmour(rec);
+		end else if (sHeader = 'AMMO') then begin
+			PatchAmmo(rec);
+		end else if (sHeader = 'ALCH') then begin
+			PatchAlchemy(rec);
 		end;
-		AddMessage(RemoveTags(geev(rec, 'FULL - Name')));
-		//AddTag(rec, 'FULL - Name');
+		AddTag(rec, 'FULL - Name');
 	end;	
-	
-	
 end;
 
 {===================================================================================================================}
@@ -241,19 +316,19 @@ end;
 
 procedure FilterWeapon(e: IInterface);
 begin
-	{ Checks if weapon has Non-Playable flag. }
+	{ Does the record have Non-Playable flag? }
 	if (GetElementEditValues(e, 'DNAM - Data\Flags\Not Playable') = '1') then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having Non Playable tag', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
 	end;
-	{ Checks if weapon has a model. }
+	{ Does the record have a model? } 
 	if not (HasModel(e)) then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having no model', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
 	end;
-	{ Checks weapon EDID for predefined strings. }
+	{ Does the record contain any substr from fltrWeaponStrings? }
 	if (ElementContainsStrFromList(e, 'EDID - Editor ID', fltrWeaponStrings)) then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s based on excl/incl lists', [sHeader, Name(e)]));
 		RemoveRecord(i);
@@ -266,12 +341,12 @@ var
 	sRace: string;
 begin
 	sRace := GetElementEditValueTrimmed(e, 'RNAM - Race');
-	{ Checks if Armour has Non-Playable flag. }
+	{ Does the record have Human Race and Non Playable flag? }
 	if (sRace = 'HumanRace "Human"') and (IsNonPlayable(e)) then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for being Human + Non Playable', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
-	{ Checks if Armour is usable by a race in the predefined list: fltrAllowArmourRaces. }
+	{ Does the record have a race defined in fltrAllowArmourRaces? }
 	end else if (fltrAllowArmourRaces.IndexOf(sRace) = -1) then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for not being allowed race', [sHeader, Name(e)]));
 		RemoveRecord(i);
@@ -281,7 +356,7 @@ end;
 
 procedure FilterAmmo(e: IInterface);
 begin
-	{ Checks if ammo has Non-Playable flag }
+	{ Does the record have Non-Playable flag? }
 	if (IsNonPlayable(e)) then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having Non Playable tag', [sHeader, Name(e)]));
 		RemoveRecord(i);
@@ -291,20 +366,20 @@ end;
 
 procedure FilterAlchemy(e: IInterface);
 begin
-	{ Checks if Ingestible has a model. } 
+	{ Does the record have a model? } 
 	{ NOTE: Might be a problem for script chems e.g. uninstallers? }
 	if not (HasModel(e)) then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having no model', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
 	end;
-	{ Checks if Ingestible has a keyword from a predefined list: fltrAlchemyKeywords. }
+	{ Does the record have a keyword from the list fltrAlchemyKeywords }
 	if (HasKeywordFromList(e, fltrAlchemyKeywords)) then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for HC Keyword', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
 	end;
-	{ Checks Ingestible EDID for certain substrings, inclusions: fltrAlchemyStringsAllow, exclusions: fltrAlchemyStrings. }
+	{ Does the record EDID contain any substr from fltrAlchemyKeywords? }
 	if (ElementContainsStrFromList(e, 'EDID - Editor ID', fltrAlchemyStrings)) and not (ElementContainsStrFromList(e, 'EDID - Editor ID', fltrAlchemyStringsAllow)) then begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s based on excl/incl lists', [sHeader, Name(e)]));
 		RemoveRecord(i);
@@ -321,19 +396,116 @@ procedure PatchWeapon(e: IInterface);
 var
 	sAnimType: string;
 begin
-	{ Checks animation types for various values. }
 	sAnimType := GetElementEditValues(e, 'DNAM - Data\Animation Type');
+	{ Does the record have Grenade Animation Type? }
 	if (sAnimType = 'Grenade') then begin
+		{ Does the record have a substr from tlWeaponSignalGrenadeStrings? }
 		if (ElementContainsStrFromList(e, 'FULL - Name', tlWeaponSignalGrenadeStrings)) then begin
 			sTag := tUtilGrenade;
-		end else if (ElementContainsStrFromList(e, 'FULL - Name', tlWeaponTrapStrings)) then begin
-			sTag := tTraps;
+			if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Anim Type (Grenade) and Strings (tlWeaponSignalGrenadeStrings)', [sHeader, sTag, Name(e)]));
 		end else begin
 			sTag := tGrenade;
+			if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Anim Type (Grenade)', [sHeader, sTag, Name(e)]));
 		end;
+	{ Does the record have Mine Animation Type? }
+	end else if (sAnimType = 'Mine') then begin
+		{ Does the record have a substr from tlWeaponTrapStrings? }
+		if (ElementContainsStrFromList(e, 'FULL - Name', tlWeaponTrapStrings)) then begin
+			sTag := tTraps;
+			if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Anim Type (Mine) and Strings (tlWeaponTrapStrings)', [sHeader, sTag, Name(e)]));
+		end else begin
+			sTag := tMine;
+			if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Anim Type (Mine)', [sHeader, sTag, Name(e)]));
+		end;
+	end;
+	{ Simplified Sorting uses INNR for most weapon tags. }
+	{ TODO: INNR Patching }
+end;
+
+procedure PatchArmour(e: IInterface);
+var
+	sRace: string;
+begin
+	{ Does the Record have Supermutant race? }
+	sRace := GetElementEditValueTrimmed(e, 'RNAM - Race');
+	if (sRace = 'SuperMutantRace') then begin
+		sTag := tSuperMutantArmour;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Race (SuperMutant)', [sHeader, sTag, Name(e)]));
+		exit;
+	{ Does the Record have Dogmeat race? }
+	end else if (sRace = 'DogmeatRace') then begin
+		sTag := tDogArmour;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Race (Dogmeat)', [sHeader, sTag, Name(e)]));
+		exit;
 	end;
 end;
 
+procedure PatchAmmo(e: IInterface);
+begin
+	{ Does the record have PowerArmorBattery Keyword? }
+	if (HasKeyword(e, 'isPowerArmorBattery')) then begin
+		sTag := tFusionCore; 
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Keyword (isPowerArmorBattery)', [sHeader, sTag, Name(e)]));	
+	end else begin
+		sTag := tAmmo; 
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Signature (AMMO)', [sHeader, sTag, Name(e)]));
+	end;
+	{ TODO: Ballistic has 3D Count keyword? - could use to split ballistic/energy, etc. }
+end;
+
+procedure PatchAlchemy(rec: IInterface);
+begin
+	{ Individual Records which defy the script filters - only needed for vanilla patching }
+	if (geev(rec, 'EDID - Editor ID') = 'HC_Antibiotics') then begin
+		sTag := tAid;
+		exit;
+	end;
+	{ Does the record have ObjectTypeStimpack Keyword? }
+	if (HasKeyword(rec, 'ObjectTypeStimpak')) then begin
+		sTag := tStimpack;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Keyword (ObjectTypeStimpack)', [sHeader, sTag, Name(rec)]));
+	{ Does the record have an effect from tlAlchemyRadiationAidEffects? }
+	end else if (HasEffectFromList(rec, tlAlchemyRadiationAidEffects)) then begin
+		sTag := tRadiationAid; 
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Effect (tlAlchemyRadiationAidEffects)', [sHeader, sTag, Name(rec)]));	
+	{ Does the record have a Keyword from tlAlchemyCleanWaterKeywords + No radiation effect + Water in name? }
+	end else if (HasKeywordFromList(rec, tlAlchemyCleanWaterKeywords)) and not (HasEffect(rec, 'DamageRadiationWater')) and (ElementContainsStr(rec, 'FULL - Name', 'Water')) then begin
+		sTag := tCleanWater;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Keyword from tlAlchemyCleanWaterKeywords + NOT Effect (DamageRadiationWater) + Name contains Water', [sHeader, sTag, Name(rec)]));
+	{ Does the record have IV Bag preview transform? }	
+	end else if GetElementEditValueTrimmed(rec, 'PTRN - Preview Transform') = 'MiscIV' then begin
+		sTag := tBloodpack;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Preview Transform (MiscIV)', [sHeader, sTag, Name(rec)]));
+	{ Does the record use the stealthboy model? }
+	end else if (geev(rec, 'Model\MODL - Model FileName') = 'Props\StealthBoy01.nif') then begin
+		sTag := tDevice;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Model (Stealthboy01.nif)', [sHeader, sTag, Name(rec)]));	
+	{ Does the record name contain any substrs from tlAlchemyDeviceStrings? }
+	end else if (ElementContainsStrFromList(rec, 'FULL - Name', tlAlchemyDeviceStrings)) then begin
+		sTag := tDevice;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Name contains substr from tlAlchemyDeviceStrings)', [sHeader, sTag, Name(rec)]));	
+	{ Does the record have any consume found from tlAlchemyAidSounds? }
+	end else if (tlAlchemyAidSounds.IndexOf(GetElementEditValueTrimmed(rec, 'ENIT\Sound - Consume')) >= 0) then begin
+		sTag := tAid;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Has Consume Sound from tlAlchemyAidSounds)', [sHeader, sTag, Name(rec)]));
+	{ Does the record have ObjectTypeAlcohol Keyword? }
+	end else if (HasKeyword(rec, 'ObjectTypeAlcohol')) then begin
+		sTag := tAlcohol;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Keyword (ObjectTypeAlcohol)', [sHeader, sTag, Name(rec)]));
+	{ Does the record have sludge drink consume sound? }
+	end else if (GetElementEditValueTrimmed(rec, 'ENIT\Sound - Consume') = 'DLC03NPCHumanDrinkSludgePack') then begin
+		sTag := tAlcohol; 
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Consume Sound (DLC03NPCHumanDrinkSludgePack)', [sHeader, sTag, Name(rec)]));
+	{ Does the record have ObjectTypeChem Keyword? }
+	end else if (HasKeyword(rec, 'ObjectTypeChem')) then begin
+		sTag := tChem;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Keyword (ObjectTypeChem)', [sHeader, sTag, Name(rec)]));
+	{ Does the record have ObjectTypeNukaCola Keyword? }
+	end else if (HasKeyword(rec, 'ObjectTypeNukaCola')) then begin
+		sTag := tNukaCola;
+		if blDebug then AddMessage(Format('[GS] - [%s] Added %s tag to %s - Keyword (ObjectTypeNukaCola)', [sHeader, sTag, Name(rec)]));
+	end;
+end;
 {===================================================================================================================}
 {                                                Helper Functions                                                   }
 {===================================================================================================================}
@@ -343,10 +515,9 @@ procedure AddTag(e: IInterface; sPath: string);
 var
 	sCur: string;
 begin
-	
 	sCur := GetElementEditValues(e, sPath);
 	if blDeleteTags then 
-		sCur := DeleteTags(sCur);
+		sCur := RemoveTags(sCur);
 	if (sTag <> '') then
 		SetElementEditValues(e, sPath, (sTag + ' ' + sCur));
 end;
@@ -355,7 +526,7 @@ end;
 function RemoveTags(s: string): string;
 var
 	sChars, sNew: string;
-	j, n, x: integer;
+	j, n, x: integer; 
 begin
 	sChars := '[{(|]})|';
 	x := Length(sChars) Div 2;
@@ -468,7 +639,7 @@ end;
 { Checks whether an element contains a SubStr. }
 function ElementContainsStr(e: IInterface; sPath, sStr: string): boolean;
 begin
-	Result := (Pos(sStr, geev(e, sPath)) > 0);
+	Result := (Pos(Lowercase(sStr), Lowercase(geev(e, sPath))) > 0);
 end;
 
 { Checks whether an element contains a SubStr from a list. }
@@ -559,7 +730,4 @@ begin
 	end;		
 end;		
 	
-	
-///////////////////////////////////////////  END ////////////////////////////////////////////////////
-
 end.
