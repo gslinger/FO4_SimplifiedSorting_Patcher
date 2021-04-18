@@ -12,12 +12,20 @@ const
 	blDefaultPluginState	= true;
 	// 
 	excludeEsps       		= 'Fallout4.esm'#13'DLCCoast.esm'#13'DLCNukaWorld.esm'#13'DLCRobot.esm'#13'DLCworkshop01.esm'#13'DLCworkshop02.esm'#13'DLCworkshop03.esm';	
+	sAuthor                 = 'GS_SS_Patcher';
 	
+	// All tags will be here, I will put in txt file at end
+	
+	// Grenades/Mines 
+	tUtilGrenade            = '[W9SIG]';  // Has Grenade Anim Type + A Substr from tlWeaponSignalGrenadeStrings
+	tTraps                  = '[W9TRP]';  // Has Grenade Anim Type + A Substr from tlWeaponTrapStrings
+	tGrenade                = '[W9GND]';  // Has Grenade Anim Type  (leftovers from above)
+	tMine             		= '[W9MNE]';          
 // =================================Declare Global Variables Here ========================================== //
 var 
-	tlFiles, validPlugins, tlSigsToLoad, fltrAlchemyKeywords, fltrAlchemyStrings, fltrAlchemyStringsAllow, fltrAllowArmourRaces: TStringList;
+	tlFiles, validPlugins, tlSigsToLoad, tlWeaponSignalGrenadeStrings, fltrAlchemyKeywords, fltrAlchemyStrings, tlWeaponAnimMelee, fltrAlchemyStringsAllow, fltrAllowArmourRaces, fltrWeaponStrings: TStringList;
 	i: integer;
-	sHeader: string;
+	sHeader, sTag: string;
 
 // ======================================== Main Function =============================================== //
 
@@ -30,7 +38,7 @@ var
 begin
 	DefaultOptionsMXPF;
 	InitializeMXPF;
-	PatchFileByAuthor('1N_SS_Patcher');
+	PatchFileByAuthor(sAuthor);
 	mxLoadMasterRecords := true;
 	mxSkipPatchedRecords := true;
 	mxLoadWinningOverrides := true;
@@ -39,6 +47,7 @@ begin
 	CreateLists;
 	
 	// Filters only plugins with relevant records (defined by tlSigsToLoad).
+	AddMessage('[GS] - Checking Plugins for relevant records');
 	validPlugins := TStringList.Create;
 	FilterValidPlugins;
 	
@@ -47,6 +56,7 @@ begin
 	sFiles := tlFiles.CommaText;
 	
 	// Load all records.
+	AddMessage('[GS] - Loading all relevant records');
 	SetInclusions(sFiles);
 	LoadAllRecords;
 	
@@ -59,13 +69,11 @@ begin
 	// Process the records, filtering + patching.
 	ProcessRecords;
 	
-	// Copy the records to patch file.
-	ClearPatch;
-	CopyRecordsToPatch;
-	
 	// Finalizing Scripts and Tidy up.
+	AddMessage('[GS] - Script is finishing, Patching was successful');
 	PrintMXPFReport;
 	FinalizeMXPF;
+	AddMessage('[GS] - Script has finished, Please remember to save patch');
 end;
 
 // ==================================== Pre-Processing Functions =========================================
@@ -76,13 +84,14 @@ var
 begin
 	for j := 0  to FileCount - 2 do begin
 		f := FileByLoadOrder(j);
-		if (Pos(GetFileName(f), excludeEsps) > 0) and blIgnoreBethesda then
+		if (Pos(GetFileName(f), excludeEsps) > 0) and blIgnoreBethesda then begin
 			continue;
+		end else if (GetAuthor(f) = sAuthor) then begin
+			continue;
+		end;
 		for n := 0 to tlSigsToLoad.Count - 1 do begin
 			g := GroupBySignature(f, tlSigsToLoad[n]);
-			//if blDebug then
-			//	AddMessage(Format('[1N] %s : %s : %s', [GetFileName(f), tlSigsToLoad[n],IntToStr(ElementCount(g))]));
-			if ElementCount(g) > 0 then begin
+			if (ElementCount(g) > 0) then begin
 				validPlugins.Add(GetFileName(f));
 				break;
 			end;		
@@ -92,11 +101,13 @@ end;
 
 procedure CreateLists();
 begin
+	// Might be better to just use comma-separated strings with Pos(). 
+
 	tlSigsToLoad := TStringList.Create;
-		//tlSigsToLoad.Add('WEAP');
+		tlSigsToLoad.Add('WEAP');
 		//tlSigsToLoad.Add('ARMO');
 		//tlSigsToLoad.Add('AMMO');
-		tlSigsToLoad.Add('ALCH');
+		//tlSigsToLoad.Add('ALCH');
 		//tlSigsToLoad.Add('BOOK');
 		//tlSigsToLoad.Add('NOTE');
 		//tlSigsToLoad.Add('KEYM');
@@ -118,7 +129,28 @@ begin
 	
 	fltrAlchemyStringsAllow := TStringList.Create;
 		fltrAlchemyStringsAllow.Add('HC_Herbal');
-		fltrAlchemyStringsAllow.Add('HC_Antibiotics')
+		fltrAlchemyStringsAllow.Add('HC_Antibiotics');
+		
+	fltrWeaponStrings := TStringList.Create;
+		fltrWeaponStrings.Add('DLC05WorkshopFireworkWeapon');
+		fltrWeaponStrings.Add('MS02Nuke');
+		fltrWeaponStrings.Add('DLC05PaintballGun');
+		fltrWeaponStrings.Add('FatManBomb');
+		fltrWeaponStrings.Add('WorkshopArtilleryWeapon');
+		
+	tlWeaponAnimMelee := TStringList.Create;
+		tlWeaponAnimMelee.Add('HandToHandMelee');
+		tlWeaponAnimMelee.Add('OneHandAxe');
+		tlWeaponAnimMelee.Add('OneHandDagger');
+		tlWeaponAnimMelee.Add('OneHandMace');
+		tlWeaponAnimMelee.Add('OneHandSword');
+		tlWeaponAnimMelee.Add('TwoHandAxe');
+		tlWeaponAnimMelee.Add('TwoHandSword');
+
+	tlWeaponSignalGrenadeStrings := TStringList.Create;
+		tlWeaponSignalGrenadeStrings.Add('Signal');
+		tlWeaponSignalGrenadeStrings.Add('Beacon');
+		tlWeaponSignalGrenadeStrings.Add('Smoke');
 end;
 
 procedure LoadAllRecords();
@@ -147,6 +179,7 @@ var
 	rec: IInterface;
 begin
 	// Filter Records
+	AddMessage('[GS] - The script will now filter and remove irrelevant or bad records');
 	for i := MaxRecordIndex downto 0 do begin
 		rec := GetRecord(i);
 		if not HasName(rec) then begin
@@ -155,7 +188,6 @@ begin
 			continue;
 		end;
 		sHeader := GetElementEditValues(rec, 'Record Header\Signature');
-		
 		if (sHeader = 'WEAP') then begin
 			FilterWeapon(rec);
 		end else if (sHeader = 'ARMO') then begin
@@ -166,6 +198,26 @@ begin
 			FilterAlchemy(rec);
 		end;
 	end;
+	
+	// Copy the records to patch file.
+	AddMessage('[GS] - Copying relevant records to patch file');
+	ClearPatch;
+	CopyRecordsToPatch;
+	
+	// Patch records and add tags.
+	AddMessage('[GS] - Patching records, may take a little while depending on selected load order size');
+	// 
+	for i := MaxRecordIndex downto 0 do begin
+		sTag := '';
+		rec := GetPatchRecord(i);
+		sHeader := GetElementEditValues(rec, 'Record Header\Signature');
+		if (sHeader = 'WEAP') then begin
+			PatchWeapon(rec);
+		end;
+		AddTag(rec, 'FULL - Name');
+	end;	
+	
+	
 end;
 
 // ===================================== Filter Functions ============================================ //
@@ -183,7 +235,13 @@ begin
 		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s for having no model', [sHeader, Name(e)]));
 		RemoveRecord(i);
 		exit;
-	end;		
+	end;
+	// Check Editor IDs for certain Sub Strings
+	if (ElementContainsStrFromList(e, 'EDID - Editor ID', fltrWeaponStrings)) then begin
+		if blDebug then AddMessage(Format('[GS] - [%s] Filtered %s based on excl/incl lists', [sHeader, Name(e)]));
+		RemoveRecord(i);
+		exit;
+	end;	
 end;
 
 procedure FilterArmour(e: IInterface);
@@ -235,17 +293,23 @@ begin
 		exit;
 	end;
 end;
+
+
 // ===================================== Patch Functions ============================================ //
 
 procedure PatchWeapon(e: IInterface);
 var
-	f: IInterface;
+	sAnimType: string;
 begin
-	//AddTag(f, '[WEAPON]', 'FULL - Full Name');	
-	AddMessage(Name(e));
+	sAnimType := GetElementEditValues(e, 'DNAM - Data\Animation Type');
+	if (sAnimType = 'Grenade') then begin
+		if (ElementContainsStrFromList(e, 'FULL - Name', tlWeaponSignalGrenadeStrings)) then begin
+			
+		sTag := tGrenade;
+	end;
 end;
 // ======================================= Helper Functions ============================================== //
-procedure AddTag(e: IInterface; sTag, sPath: string);
+procedure AddTag(e: IInterface; sPath: string);
 var
 	sCur: string;
 begin
