@@ -15,10 +15,35 @@ const
 	blDeleteTags            = true;
 	excludeEsps       		= 'Fallout4.esm'#13'DLCCoast.esm'#13'DLCNukaWorld.esm'#13'DLCRobot.esm'#13'DLCworkshop01.esm'#13'DLCworkshop02.esm'#13'DLCworkshop03.esm';	
 	sAuthor                 = 'GS_SS_Patcher';
+	
+	// Local Form Ids for Simplified Sorting Dynamic Naming Keywords
+	dnEyewearId				= $000800;
+	dnHatId				    = $000801;
+	dnRingId				= $000802;
+	dnBackpackId			= $000803;
+	dnClothesId				= $000804;
+	dnUnderarmourId			= $000805;
+	dnFullArmourId			= $000806;
+	dnHazmatSuitId			= $000807;
+	dnMaskId				= $000808;
+	dnHelmetId			    = $000809;
+	dnArmourLeftArmId	    = $00080A;
+	dnArmourRightArmId	    = $00080B;
+	dnArmourTorsoId			= $00080C;
+	dnArmourLeftLegId		= $00080D;
+	dnArmourRightLegId		= $00080E;
+	dnSupermutantId		    = $00080F;
+	dnDogId				    = $000810;
+	
+	// Form IDs for various vanilla records of use. 
+	kPowerArmourId          = 1;
+	
 var 
-	tlFiles, validPlugins, tlVanillaBlacklist, tlAlchemyMeatStrings, tlAlchemyCleanWaterKeywords, tlAlchemyAidSounds, tlAlchemyDeviceStrings, tlCraftingIngredients, tlSigsToLoad, tlAlchemyRadiationAidEffects, tlWeaponTrapStrings, tlWeaponSignalGrenadeStrings, fltrAlchemyKeywords, fltrAlchemyStrings, tlWeaponAnimMelee, fltrAlchemyStringsAllow, fltrAllowArmourRaces, fltrWeaponStrings: TStringList;
+	tlFiles, validPlugins, tlWeaponTrapStrings, tlVanillaBlacklist, tlAlchemyMeatStrings, tlAlchemyCleanWaterKeywords, tlAlchemyAidSounds, tlAlchemyDeviceStrings, tlCraftingIngredients, tlSigsToLoad, tlAlchemyRadiationAidEffects, tlArmourBackpackStrings, tlWeaponSignalGrenadeStrings, fltrAlchemyKeywords, fltrAlchemyStrings, tlWeaponAnimMelee, fltrAlchemyStringsAllow, fltrAllowArmourRaces, fltrWeaponStrings: TStringList;
 	i: integer;
 	sHeader, sTag: string;
+	fSimplifiedSorting: IInterface;
+	kEyewear: IInterface;
 
 {===================================================================================================================}
 {                                                  Main Function                                                    }
@@ -46,6 +71,9 @@ begin
 	validPlugins := TStringList.Create;
 	FilterValidPlugins;
 	
+	{ TODO: Find best place for this? Best to do check for SS ASAP! }
+	SetUpInnr;
+	
 	{ Show form to select which plugins to patch. }
 	ShowPluginSelect;
 	sFiles := tlFiles.CommaText;
@@ -61,7 +89,7 @@ begin
 		exit;
 	end;
 	
-	// Checks all COBJ for crafting ingredients, somewhat slow 
+	// Checks all COBJ for crafting ingredients
 	{
 	tlCraftingIngredients := TStringList.Create;
 	tlCraftingIngredients := GetCraftingIngredients();
@@ -108,6 +136,21 @@ begin
 	end;	
 end;
 
+{ Sets up variables ready for INNR patching } 
+procedure SetUpInnr(); 
+begin
+	{ TODO: This should probably be at start of Init function? }
+	fSimplifiedSorting := FileByName('Simplified Sorting.esp');
+	if (Assigned(fSimplifiedSorting)) then
+		ShowMessage('Yay!')
+	else
+		raise Exception.Create('Simplified Sorting.esp not found! It is required for keywords.');
+		
+	kEyewear := RecordByFormID(fSimplifiedSorting, (MasterCount(fSimplifiedSorting) * $01000000 + dnEyewearId), false);
+	AddMessage(Name(kEyewear));
+	
+end;
+
 { Creates various lists used by the script }
 { TODO: Might be better to just use comma-separated strings with Pos()? }
 procedure CreateLists();
@@ -152,6 +195,12 @@ begin
 		tlWeaponTrapStrings.Add('Trap ');
 		tlWeaponTrapStrings.Add('Caltrop');
 	
+	{ Contains Substrs to Identify Backpacks }
+	tlArmourBackpackStrings := TStringList.Create;
+		tlArmourBackpackStrings.Add('Bandolier');
+		tlArmourBackpackStrings.Add('Backpack');
+		tlArmourBackpackStrings.Add(' Bag');
+		
 	{ Contains Effect IDs to identify Radiation Aid }
 	tlAlchemyRadiationAidEffects := TStringList.Create;
 		tlAlchemyRadiationAidEffects.Add('FortifyResistRadsRadX');
@@ -185,6 +234,8 @@ begin
 		tlVanillaBlacklist.Add('DLC05PaintballGun');
 		tlVanillaBlacklist.Add('FatManBomb');
 		tlVanillaBlacklist.Add('WorkshopArtilleryWeapon');
+		tlVanillaBlacklist.Add('NonPlayable');
+		tlVanillaBlacklist.Add('DLC03_Clothes_Waders');
 end;	
 
 
@@ -209,6 +260,7 @@ begin
 end;
 
 { Checks every COBJ for its components and creates a non-duplicate list }
+{ TODO: More efficient to use ReferencedByIndex? Does it require loading references when opening FO4Edit? Can 'BuildRef' be used if so? }
 function GetCraftingIngredients(): TStringList;
 var
 	j, k, l: integer;
@@ -338,13 +390,11 @@ end;
 
 procedure FilterAlchemy(e: IInterface);
 begin
-	{ Does the record have a model? } 
 	{ NOTE: Might be a problem for script chems e.g. uninstallers? }
 	if not (HasModel(e)) then begin
 		RemoveRecord(i);
 		exit;
 	end;
-	{ Does the record EDID contain any substr from fltrAlchemyKeywords? }
 	if (ElementContainsStrFromList(e, 'EDID - Editor ID', fltrAlchemyStrings)) and not (ElementContainsStrFromList(e, 'EDID - Editor ID', fltrAlchemyStringsAllow)) then begin
 		RemoveRecord(i);
 		exit;
@@ -383,19 +433,105 @@ end;
 procedure PatchArmour(rec: IInterface);
 var
 	sRace: string;
+	j: integer;
+	eBodyFlags: IInterface;
 begin
+
+	{ NON HUMAN ARMOUR } 
 	sRace := GetElementEditValueTrimmed(rec, 'RNAM - Race');
 	if (sRace = 'SuperMutantRace') then begin
 		sTag := '[SUPERMUTANT]';
 		exit;
-	end else if (sRace = 'DogmeatRace') then begin
+	end else if (sRace = 'DogmeatRace') or (HasKeyword(rec, 'ClothingDogmeat')) then begin
 		sTag := '[DOG]';
 		exit;
 	end;
+	
+	eBodyFlags := ElementByPath(rec, 'BOD2 - Biped Body Template\First Person Flags');
+	if (ElementCount(eBodyFlags) = 1) then begin
+		{ SINGLE FLAG ARMOR PIECES }
+		if (HasBipedFlag(rec, '42 - [A] L Arm')) then begin
+			if HasKeyword(rec, 'ArmorTypePower') then
+				sTag := '[POWER ARMOR L ARM]'
+			else
+				sTag := '[ARMOR L ARM]';
+		end else if (HasBipedFlag(rec, '43 - [A] R Arm')) then begin
+			if HasKeyword(rec, 'ArmorTypePower') then
+				sTag := '[POWER ARMOR R ARM]'
+			else
+				sTag := '[ARMOR R ARM]';
+		end else if (HasBipedFlag(rec, '44 - [A] L Leg')) then begin
+			if HasKeyword(rec, 'ArmorTypePower') then
+				sTag := '[POWER ARMOR L LEG]'
+			else
+				sTag := '[ARMOR L LEG]';
+		end else if (HasBipedFlag(rec, '45 - [A] R Leg')) then begin
+			if HasKeyword(rec, 'ArmorTypePower') then
+				sTag := '[POWER ARMOR R LEG]'
+			else
+				sTag := '[ARMOR R LEG]';
+		end else if (HasBipedFlag(rec, '41 - [A] Torso')) then begin
+			if HasKeyword(rec, 'ArmorTypePower') then begin
+				sTag := '[POWER ARMOR TORSO]';
+			end else if (ElementContainsStrFromList(rec, 'FULL - Name', tlArmourBackpackStrings)) then begin
+				sTag := '[BACKPACK]';
+			end else begin
+				sTag := '[ARMOR TORSO]';
+			end;
+		{ SINGLE FLAG CLOTHING PIECES }
+		end else if (HasBipedFlag(rec, '47 - Eyes')) then begin
+			if (ElementContainsStr(rec, 'FULL - Name', 'Mask')) then
+				sTag := '[MASK]'
+			else
+				sTag := '[EYEWEAR]';
+		end else if (HasBipedFlag(rec, '51 - Ring')) then begin
+			sTag := '[RING]';
+		end else if (HasBipedFlag(rec, '30 - Hair Top')) or (HasBipedFlag(rec, '46 - Headband')) then begin
+			sTag := '[HAT]';
+		end else if (HasBipedFlag(rec, '54 - Unnamed')) then begin
+			sTag := '[BACKPACK]';
+		end else if (HasBipedFlag(rec, '50 - Neck')) then begin
+			sTag := '[NECK]';
+		end;
+		{ MULTIPLE FLAG PIECES }
+	end else begin
+		if (HasKeyword(rec, 'ArmorTypePower')) and (HasBipedFlag(rec, '52 - Scalp')) then begin
+			sTag := '[POWER ARMOR HELMET]';
+		end else if (HasBipedFlag(rec, '30 - Hair Top')) and not (HasBipedFlag(rec, '33 - BODY')) then begin
+			if (GetElementEditValues(rec, 'FNAM - FNAM\Armor Rating') > 0) then begin
+				sTag := '[HELMET]';
+			end else begin
+ 				sTag := '[HAT]';
+			end;
+		end else if (HasBipedFlag(rec, '33 - BODY')) then begin
+			if (IsAllBody(rec, 'U')) and not (IsAnyBody(rec, 'A')) then
+				sTag := '[UNDERARMOR]'
+			else if (GetElementEditValues(rec, 'FNAM - FNAM\Armor Rating') > 0) then
+				sTag := '[ARMOR]'
+			else
+				sTag := '[CLOTHING]';
+		end else if (IsAllBody(rec, 'A')) then begin
+			sTag := '[ARMOR TORSO]';
+		end else if (IsMask(rec)) then begin
+			sTag := '[MASK]';
+		end;
+	end;
+	PatchArmourInnr(rec);
+end;
+
+procedure PatchArmourInnr(rec, IInterface);
+var
+	sInrd: string;
+	fArmorKeywords, kwdaEyewear: IInterface;
+	
+begin
+	sInrd := geev(rec, 'INRD');
+
 end;
 
 procedure PatchAmmo(rec: IInterface);
 begin
+
 	if (HasKeyword(rec, 'isPowerArmorBattery')) then begin
 		sTag := '[FUSIONCORE]';
 	end else begin
@@ -489,12 +625,70 @@ end;
 {                                                Helper Functions                                                   }
 {===================================================================================================================}
 
-procedure DebugMsg(rec: IInterface; sMessage: string);
+{ See if clothing item covers multiple face parts }
+{ TODO: Do mods use AnimHelmetCoversMouth ? could use as 2nd check }
+function IsMask(rec: IInterface): boolean;
+var
+	n: integer;
 begin
-	if not blDebug then exit;
-	AddMessage(Format('[GS] - [%s] Added %s tag to %s - %s', [sHeader, sTag, Name(rec), sMessage]));
+	n := 0;
+	if (HasBipedFlag(rec, '46 - Headband')) then
+		Inc(n);
+	if (HasBipedFlag(rec, '47 - Eyes')) then
+		Inc(n);
+	if (HasBipedFlag(rec, '48 - Beard')) then
+		Inc(n);
+	if (HasBipedFlag(rec, '49 - Mouth')) then
+		Inc(n);
+	if (n > 1) then 
+		Result := true
+	else 
+		Result := false;
+	
 end;
 
+function IsAllBody(rec: IInterface; s: string): boolean;
+var
+	n: integer;
+begin
+	if (s = 'A') then
+		n := 41
+	else if (s = 'U') then
+		n := 36
+	else
+		exit;
+
+	if (HasBipedFlag(rec, Format( '%s - [%s] Torso', [IntToStr(n), s]))) 
+	and (HasBipedFlag(rec, Format( '%s - [%s] L Arm', [IntToStr(n+1),s])))
+	and (HasBipedFlag(rec, Format( '%s - [%s] R Arm', [IntToStr(n+2),s])))
+	and (HasBipedFlag(rec, Format( '%s - [%s] L Leg', [IntToStr(n+3),s])))
+	and (HasBipedFlag(rec, Format( '%s - [%s] R Leg', [IntToStr(n+4),s]))) then
+		Result := true;		
+end;
+
+function IsAnyBody(rec: IInterface; s: string): boolean;
+var
+	n: integer;
+begin
+	if (s = 'A') then
+		n := 41
+	else if (s = 'U') then
+		n := 36
+	else
+		exit;
+
+	if (HasBipedFlag(rec, Format( '%s - [%s] Torso', [IntToStr(n), s]))) 
+	or (HasBipedFlag(rec, Format( '%s - [%s] L Arm', [IntToStr(n+1),s])))
+	or (HasBipedFlag(rec, Format( '%s - [%s] R Arm', [IntToStr(n+2),s])))
+	or (HasBipedFlag(rec, Format( '%s - [%s] L Leg', [IntToStr(n+3),s])))
+	or (HasBipedFlag(rec, Format( '%s - [%s] R Leg', [IntToStr(n+4),s]))) then
+		Result := true;		
+end;
+
+function HasBipedFlag(rec: IInterface; s: string): boolean;
+begin
+	Result := (GetElementEditValues(rec, 'BOD2 - Biped Body Template\First Person Flags\' + s) = '1')
+end;
 
 { Adds a prefix tag to element from path, sTag is defined by Patch* functions. }
 procedure AddTag(e: IInterface; sPath: string);
@@ -550,14 +744,13 @@ end;
 { Checks if a record has a Non-Playable flag. }
 function IsNonPlayable(e: IInterface): boolean;
 begin
-	Result := false;
-	if (GetElementEditValues(e, 'Record Header\Record Flags\Non-Playable') = '1') then Result := true;
+	Result := (GetElementEditValues(e, 'Record Header\Record Flags\Non-Playable') = '1');
 end;
 
 { Checks if a record has a model. }
 function HasModel(e: IInterface): boolean;
 begin
-	Result := Assigned(geev(e, 'Model\MODL - Model FileName'))
+	Result := (Assigned(geev(e, 'Model\MODL - Model FileName')))
 end;
 
 { Checks if a record has a name. }
