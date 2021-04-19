@@ -14,6 +14,7 @@ const
 	blDefaultPluginState	= true;
 	blDeleteTags            = true;
 	excludeEsps       		= 'Fallout4.esm'#13'DLCCoast.esm'#13'DLCNukaWorld.esm'#13'DLCRobot.esm'#13'DLCworkshop01.esm'#13'DLCworkshop02.esm'#13'DLCworkshop03.esm';	
+	sDnKeywordsSS           = 'dn_A1EYE dn_A1HAT dn_A1RNG dn_A2BPK dn_A2CLT dn_A2UAR dn_A3FAR dn_A3HZM dn_A3MSK dn_A4AHM dn_A4ARL dn_A4ARR dn_A4CHS dn_A4LLG dn_A4RLG dn_A62MU dn_A7DOG';
 	sAuthor                 = 'GS_SS_Patcher';
 	
 	// Local Form Ids for Simplified Sorting Dynamic Naming Keywords
@@ -43,7 +44,9 @@ var
 	i: integer;
 	sHeader, sTag: string;
 	fSimplifiedSorting: IInterface;
-	kEyewear: IInterface;
+	//kEyewear: IInterface;
+	kEyewear, kHat, kRing, kBackpack, kClothes, kUnderarmour, kFullArmour, kHazmatSuit, kMask, kHelmet, kArmourLeftArm, kArmourRightArm, kArmourTorso, kArmourLeftLeg, kArmourRightLeg, kSuperMutant, kDog: string;
+	
 
 {===================================================================================================================}
 {                                                  Main Function                                                    }
@@ -78,10 +81,15 @@ begin
 	ShowPluginSelect;
 	sFiles := tlFiles.CommaText;
 	
+	
+	
 	{ Load all records. }
 	AddMessage('[GS] - Loading all relevant records');
 	SetInclusions(sFiles);
 	LoadAllRecords;
+	
+	AddMastersToPatch;
+	AddMasterIfMissing(mxPatchFile, 'Simplified Sorting.esp');
 	
 	{ Abort Script if No Records found. }
 	if (MaxRecordIndex = -1) then begin
@@ -141,13 +149,20 @@ procedure SetUpInnr();
 begin
 	{ TODO: This should probably be at start of Init function? }
 	fSimplifiedSorting := FileByName('Simplified Sorting.esp');
-	if (Assigned(fSimplifiedSorting)) then
-		ShowMessage('Yay!')
-	else
+	if not (Assigned(fSimplifiedSorting)) then
 		raise Exception.Create('Simplified Sorting.esp not found! It is required for keywords.');
-		
-	kEyewear := RecordByFormID(fSimplifiedSorting, (MasterCount(fSimplifiedSorting) * $01000000 + dnEyewearId), false);
-	AddMessage(Name(kEyewear));
+	
+	{ TODO: Can i tidy this? Dictionary? }
+	//kEyewear := IntToHex(MasterCount(fSimplifiedSorting) * $01000000 + dnEyewearId, 8);
+	kEyewear := GetHexFormID(dnEyewearId);
+	kHat := GetHexFormID(dnHatId);
+	kEyewear := GetHexFormID(dnEyewearId);
+	kEyewear := GetHexFormID(dnEyewearId);
+	kEyewear := GetHexFormID(dnEyewearId);
+	kEyewear := GetHexFormID(dnEyewearId);
+	kEyewear := GetHexFormID(dnEyewearId);
+	kEyewear := GetHexFormID(dnEyewearId);
+	kEyewear := GetHexFormID(dnEyewearId);
 	
 end;
 
@@ -156,10 +171,10 @@ end;
 procedure CreateLists();
 begin
 	tlSigsToLoad := TStringList.Create;
-		tlSigsToLoad.Add('WEAP');
+		//tlSigsToLoad.Add('WEAP');
 		tlSigsToLoad.Add('ARMO');
-		tlSigsToLoad.Add('AMMO');
-		tlSigsToLoad.Add('ALCH');
+		//tlSigsToLoad.Add('AMMO');
+		//tlSigsToLoad.Add('ALCH');
 		//tlSigsToLoad.Add('BOOK');
 		//tlSigsToLoad.Add('NOTE');
 		//tlSigsToLoad.Add('KEYM');
@@ -236,6 +251,7 @@ begin
 		tlVanillaBlacklist.Add('WorkshopArtilleryWeapon');
 		tlVanillaBlacklist.Add('NonPlayable');
 		tlVanillaBlacklist.Add('DLC03_Clothes_Waders');
+		
 end;	
 
 
@@ -516,18 +532,30 @@ begin
 			sTag := '[MASK]';
 		end;
 	end;
-	PatchArmourInnr(rec);
+	PatchArmourInnr(rec, kEyewear);
 end;
 
-procedure PatchArmourInnr(rec, IInterface);
+procedure PatchArmourInnr(rec: IInterface; keyword: string);
 var
 	sInrd: string;
 	fArmorKeywords, kwdaEyewear: IInterface;
 	
 begin
 	sInrd := geev(rec, 'INRD');
-
+	AddInnrKey(rec, keyword);
 end;
+
+procedure AddInnrKey(rec: IInterface; keyword: string);
+var
+	eKeywords: IInterface;
+begin
+	{ TODO: Might want to check for discrepencies between existing tags and my filtered suggestions }
+	if not (HasKywd(rec, sDnKeywordsSS)) then begin
+		eKeywords := ElementByPath(rec, 'KWDA - Keywords');
+		SetEditValue(ElementAssign(eKeywords, HighInteger, nil, false), keyword);
+	end;
+end;
+
 
 procedure PatchAmmo(rec: IInterface);
 begin
@@ -625,6 +653,13 @@ end;
 {                                                Helper Functions                                                   }
 {===================================================================================================================}
 
+
+{ Gets load order hex form id as string, input is local form ID }
+function GetHexFormID(id: variant): string;
+begin
+	Result := IntToHex(MasterCount(fSimplifiedSorting) * $01000000 + id, 8);
+end;
+
 { See if clothing item covers multiple face parts }
 { TODO: Do mods use AnimHelmetCoversMouth ? could use as 2nd check }
 function IsMask(rec: IInterface): boolean;
@@ -647,6 +682,7 @@ begin
 	
 end;
 
+{ Checks if a piece of clothing covers all body parts, can check for 'A' (Armour) or 'U' (Underarmour) }
 function IsAllBody(rec: IInterface; s: string): boolean;
 var
 	n: integer;
@@ -666,6 +702,7 @@ begin
 		Result := true;		
 end;
 
+{ Checks if a piece of clothing covers any body part, can check for 'A' (Armour) or 'U' (Underarmour) }
 function IsAnyBody(rec: IInterface; s: string): boolean;
 var
 	n: integer;
@@ -685,6 +722,7 @@ begin
 		Result := true;		
 end;
 
+{ Checks if a clothing piece has a specified Biped flag }
 function HasBipedFlag(rec: IInterface; s: string): boolean;
 begin
 	Result := (GetElementEditValues(rec, 'BOD2 - Biped Body Template\First Person Flags\' + s) = '1')
@@ -830,6 +868,20 @@ begin
 			Result := true;
 			exit;
 		end;
+	end;
+end;
+
+{ Checks if a record has a keyword in a string } 
+function HasKywd(e: IInterface; sKeywords: string): boolean;
+var
+	eKwda: IInterface;
+	j: integer;
+begin
+	Result := false;
+	eKwda := ElementByPath(e, 'KWDA');
+	for j := 0 to ElementCount(eKwda) - 1 do begin
+		if (Pos(geev(LinksTo(ElementByIndex(eKwda, j)), 'EDID'), sKeywords) > 0) then
+			Result := true;
 	end;
 end;
 
