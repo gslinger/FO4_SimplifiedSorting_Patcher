@@ -261,6 +261,10 @@ begin
 	Result := ElementByPathAsList(rec, 'KWDA - Keywords', 'EDID', true);
 end;
 
+procedure AddKeyword(rec: IInterface; keyword: variant);
+
+
+
 { Internal functions ...  } 
 
 { Gets an Element as a list of strings, meant for internal use }

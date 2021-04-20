@@ -1,0 +1,283 @@
+Basic descriptions of the functions inside GS_Utilities. 
+
+Unfortunately due to limitations of xEdit, there doesn't seem to be a way to use
+things like optional or default parameters, nor does it seem to support array parameters. 
+Hence why there has to be several copies of each function.
+
+{==================================================================================}
+{           File Header                                                            }
+{==================================================================================}
+
+IsESL:
+Desc
+	Determines whether a file is flagged ESL.
+Input
+	f	: File
+Output
+	Boolean
+Example
+	if (IsESL(FileByName('Fallout4.esm'))) then
+		...
+		
+IsESM:
+Desc
+	Determines whether a file is flagged ESM.
+Input
+	f	: File
+Output
+	Boolean
+Example
+	if (IsESM(FileByName('Fallout4.esm'))) then
+		...
+
+GetFileRecordCount:
+Desc
+	Returns total number of records in a file.
+Input
+	f	: File
+Output
+	Integer
+Example
+	nRecordCount := GetFileRecordCount(FileByName('Fallout4.esm'));
+
+{==================================================================================}
+{           File Management                                                        }
+{==================================================================================}
+
+FileByName:
+Desc
+	Returns a file reference for a specified name.
+Input
+	sName	: string
+Output
+	File (IInterface)
+Example
+	fMain := FileByName('Fallout4.esm');
+
+{==================================================================================}
+{           Record Header                                                          }
+{==================================================================================}
+
+GetDataSize:
+Desc
+	Gets the File Header Data Size value.
+Input 
+	rec  : Record 
+Output
+	Integer
+Example
+	AddMessage(IntToStr(GetDataSize(rec)));
+
+GetSignature:
+Desc
+	Gets the File Header Signature value.
+Input
+	rec  : Record
+Output
+	String
+Example
+	AddMessage(GetSignature(rec));
+	
+HasRecordFlag:
+Desc
+	Checks whether a record has the specified record flag. 
+Input
+	rec     : Record
+	sFlag   : string 
+Output
+	Boolean
+Example
+	if (HasRecordFlag(rec, 'Non-Playable')) then
+		... 
+		
+GetEditorID:
+Desc
+	Gets the Editor ID of specified Record. 
+Input
+	rec     : Record
+Output
+	String
+Example
+	AddMessage(GetEditorID(rec));
+	
+SetEditorID:
+Desc 
+	Sets the Editor ID of specified Record.
+Input
+	rec		: Record
+	s       : string
+Example
+	SetEditorID(rec, 'ExampleEditorID');
+	
+
+{==================================================================================}
+{           Object Bounds                                                          }
+{==================================================================================}
+
+GetObjectBound:
+Desc
+	Gets a single specified Object Bound value.
+Input
+	rec		: Record
+	s       : string   e.g. 'x1' or 'x2' or 'y1', etc. 
+Output
+	integer
+Example
+	n := GetObjectBound(rec, 'x1');
+	
+SetObjectBound:
+Desc
+	Sets a single specified Object Bound value.
+Input
+	rec		: Record
+	sBound  : string   e.g. 'x1' or 'x2' or 'y1', etc. 
+	iValue  : integer 
+Example
+	SetObjectBound(rec, 'x1', 25);
+
+GetObjectBounds:
+Desc
+	Gets all object bounds as a list. 
+Input
+	rec		: Record
+Output
+	TStringList
+Example
+	tlObjectBounds := TStringList.Create;
+	tlObjectBounds := GetObjectBounds(rec);
+
+SetObjectBounds:
+Desc
+	Set all object bounds of a record. 
+Input
+	rec		: Record
+	x1		: integer
+	x2		: integer
+	y1		: integer
+	y2		: integer
+	z1 		: integer
+	z2		: integer
+Example
+	SetObjectBounds(rec, 1,2,3,4,5,6);
+		
+{==================================================================================}
+{           Armour Functions                                                       }
+{==================================================================================}
+
+HasBipedFlag:
+Desc
+	Checks whether a record has a specified biped flag.
+Input
+	rec		: Record
+	s		: string
+Output
+	Boolean
+Example
+	If (HasBipedFlag(rec, '33 - BODY')) then
+		... 
+
+GetBipedFlags:
+Desc
+	Gets all of the record's Biped Flags.
+Input
+	rec		: Record
+Output
+	TStringList
+Example
+	tlBipedFlags := TStringList.Create;
+	tlBipedFlags := GetBipedFlags(rec);
+
+GetBipedFlagsCount:
+Desc
+	Counts how many flags from the specified list a record has. 
+Input
+	rec      : Record
+	tlFlags  : TStringList
+Output 
+	Integer
+Example
+	flags := TStringList.Create;
+	flags.Add('46 - Headband');
+	flags.Add('47 - Eyes');
+	flags.Add('48 - Beard');
+	AddMessage(IntToStr(GetBipedFlagsCount(e, flags)));
+
+{==================================================================================}
+{           Keyword Functions                                                      }
+{==================================================================================}
+
+HasKeyword:
+Desc
+	Checks whether a record has a specified keyword.
+Input 
+	rec			: Record
+	sKeyword	: string  - Editor ID of Keyword
+Output
+	Boolean
+Example
+	if (HasKeyword(rec, 'ObjectTypeFood')) then
+		...
+		
+HasKeywordFromString:
+Desc
+	Checks whether a record has a keyword which matches inside a string
+Input
+	rec			: Record
+	sKeywords	: string  - String containing multiple keyword editor IDs.
+Output
+	Boolean
+Example
+	if (HasKeywordFromString(rec, 'ObjectTypeFood ObjectTypeChem')) then
+		...
+
+HasKeywordFromList:
+Desc
+	Checks whether a record has a keyword specified in a list.
+Input
+	rec			: Record
+	tlKeywords	: TStringList
+Output
+	Boolean
+Example
+	tlKeywords := TStringList.Create;
+	tlKeywords.CommaText := 'ObjectTypeChem, ObjectTypeFood';
+	if (HasKeywordFromList(rec, tlKeywords)) then
+		...
+
+AddKeywordByFormID:
+Desc
+	Adds a Keyword using a form ID. 
+Input
+	rec			: Record
+	sKeyword	: string
+Example
+	AddKeywordByFormID(rec, '00000879');
+
+{==================================================================================}
+{           Internal Functions                                                     }
+{	These are the more general variants of functions which many others rely on     }
+{==================================================================================}
+
+AddToContainerByFormId:
+Desc
+	Adds a value to a container using a Form ID. E.g. Adding a Keyword.
+Input
+	rec			: Record
+	sSignature  : string   - Signature to container
+	sFormId		: string   - Form ID of item added
+Example
+	AddToContainerByFormId(rec, 'KWDA', '00000879')
+	
+ElementByPathAsList:
+Desc
+	Gets all values within an element container and returns as a list.
+Input
+	rec			: Record
+	sPath		: string  - Path to Element.
+	sValue      : string  - 'Name' returns the Names, 'EDID' returns Editor IDs, otherwise returns Edit Value
+	blAllowDups : boolean - Allow duplicates in list or not.
+Output
+	TStringList
+Example
+	tlKeywords := TStringList.Create;
+	tlKeywords := ElementByPathAsList(rec, 'KWDA - Keywords', 'EDID', true);
