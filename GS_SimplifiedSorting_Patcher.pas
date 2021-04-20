@@ -1,10 +1,13 @@
 {
-	GS Simplified Sorting Patcher
+	GS Fallout 4 Simplified Sorting Patcher
 		by GS
 		
 	xEdit Script which automatically tags any items for use with Simplified Sorting. 
+	https://www.nexusmods.com/fallout4/mods/28826
 }
 
+{ TODO: CHeck ITM Records afterwards? }
+{ TODO: MAYBE: Allow amend patch? }
 unit UserScript;
 uses 'lib\mxpf';
 
@@ -14,7 +17,7 @@ const
 	blDefaultPluginState	= true;
 	blDeleteTags            = true;
 	excludeEsps       		= 'Fallout4.esm'#13'DLCCoast.esm'#13'DLCNukaWorld.esm'#13'DLCRobot.esm'#13'DLCworkshop01.esm'#13'DLCworkshop02.esm'#13'DLCworkshop03.esm';	
-	sDnKeywordsSS           = 'dn_A1EYE dn_A1HAT dn_A1RNG dn_A2BPK dn_A2CLT dn_A2UAR dn_A3FAR dn_A3HZM dn_A3MSK dn_A4AHM dn_A4ARL dn_A4ARR dn_A4CHS dn_A4LLG dn_A4RLG dn_A62MU dn_A7DOG';
+	sDnKeywordsSS           = 'dn_A1EYE dn_A1HAT dn_A1RNG dn_A2BPK dn_A2CLT dn_A2UAR dn_A3FAR dn_A3HZM dn_A3MSK dn_A4AHM dn_A4ARL dn_A4ARR dn_A4CHS dn_A4LLG dn_A4RLG dn_A62MU dn_A7DOG dn_PowerArmor_RightLeg dn_PowerArmor_LeftLeg dn_PowerArmor_RightArm dn_PowerArmor_LeftArm dn_PowerArmor_Torso dn_PowerArmor_Helmet';
 	sAuthor                 = 'GS_SS_Patcher';
 	
 	// Local Form Ids for Simplified Sorting Dynamic Naming Keywords
@@ -36,8 +39,26 @@ const
 	dnSupermutantId		    = $00080F;
 	dnDogId				    = $000810;
 	
-	// Form IDs for various vanilla records of use. 
-	kPowerArmourId          = 1;
+	// This is local form id for record which is used to copy the 'OBTE' from (from simplified sorting .esp)
+	rObteTemplate			= '001153DB';
+	
+	// These are form ids for the vanilla Instance Naming records
+
+	kDnCommonMelee			= '000B9738';
+	kDnCommonArmour			= '00184BC1';
+	kDnPowerArmour			= '00188160';
+	kDnClothes				= '0020DE44';
+	kDnCommonGun			= '002377CF';
+	kDnVaultSuit			= '0020DE44';
+	
+	// These are form ids for the vanilla DN keywords which SS use. 
+	
+	kPowerArmourLeftArm     = '00188175';
+	kPowerArmourRightArm    = '00188177';
+	kPowerArmourLeftLeg     = '00188176';
+	kPowerArmourRightLeg    = '00188178';
+	kPowerArmourHelmet      = '00188174';
+	kPowerArmourTorso       = '00188179';
 	
 var 
 	tlFiles, validPlugins, tlWeaponTrapStrings, tlVanillaBlacklist, tlAlchemyMeatStrings, tlAlchemyCleanWaterKeywords, tlAlchemyAidSounds, tlAlchemyDeviceStrings, tlCraftingIngredients, tlSigsToLoad, tlAlchemyRadiationAidEffects, tlArmourBackpackStrings, tlWeaponSignalGrenadeStrings, fltrAlchemyKeywords, fltrAlchemyStrings, tlWeaponAnimMelee, fltrAlchemyStringsAllow, fltrAllowArmourRaces, fltrWeaponStrings: TStringList;
@@ -152,24 +173,32 @@ begin
 	if not (Assigned(fSimplifiedSorting)) then
 		raise Exception.Create('Simplified Sorting.esp not found! It is required for keywords.');
 	
-	{ TODO: Can i tidy this? Dictionary? }
-	//kEyewear := IntToHex(MasterCount(fSimplifiedSorting) * $01000000 + dnEyewearId, 8);
+	{ TODO: Can i tidy this?}
+	// dn_clothes
 	kEyewear := GetHexFormID(dnEyewearId);
 	kHat := GetHexFormID(dnHatId);
-	kEyewear := GetHexFormID(dnEyewearId);
-	kEyewear := GetHexFormID(dnEyewearId);
-	kEyewear := GetHexFormID(dnEyewearId);
-	kEyewear := GetHexFormID(dnEyewearId);
-	kEyewear := GetHexFormID(dnEyewearId);
-	kEyewear := GetHexFormID(dnEyewearId);
-	kEyewear := GetHexFormID(dnEyewearId);
-	
+	kRing := GetHexFormID(dnRingId);
+	kBackpack := GetHexFormID(dnBackpackId);
+	kClothes := GetHexFormID(dnClothesId);
+	kUnderarmour := GetHexFormID(dnUnderarmourId);
+	kFullArmour := GetHexFormID(dnFullArmourId);
+	kHazmatSuit := GetHexFormID(dnHazmatSuitId);
+	kMask := GetHexFormID(dnMaskId);
+	kSuperMutant := GetHexFormID(dnSupermutantId);
+	kDog := GetHexFormID(dnDogId);
+	// dn_armor
+	kHelmet := GetHexFormID(dnHelmetId);
+	kArmourLeftArm := GetHexFormID(dnArmourLeftArmId);
+	kArmourLeftLeg := GetHexFormID(dnArmourLeftLegId);
+	kArmourRightArm := GetHexFormID(dnArmourRightArmId);
+	kArmourRightLeg := GetHexFormID(dnArmourRightLegId);
+	kArmourTorso := GetHexFormID(dnArmourTorsoId);
 end;
 
 { Creates various lists used by the script }
-{ TODO: Might be better to just use comma-separated strings with Pos()? }
 procedure CreateLists();
 begin
+	{ Contains which types of records to load }
 	tlSigsToLoad := TStringList.Create;
 		//tlSigsToLoad.Add('WEAP');
 		tlSigsToLoad.Add('ARMO');
@@ -383,13 +412,13 @@ procedure FilterArmour(e: IInterface);
 var
 	sRace: string;
 begin
-	sRace := GetElementEditValueTrimmed(e, 'RNAM - Race');
-	{ Does the record have Human Race and Non Playable flag? }
-	if (sRace = 'HumanRace "Human"') and (IsNonPlayable(e)) then begin
+	
+	if (IsNonPlayable(e)) then begin
 		RemoveRecord(i);
 		exit;
-	{ Does the record have a race defined in fltrAllowArmourRaces? }
-	end else if (fltrAllowArmourRaces.IndexOf(sRace) = -1) then begin
+	end;
+	sRace := GetElementEditValueTrimmed(e, 'RNAM - Race');
+	if (fltrAllowArmourRaces.IndexOf(sRace) = -1) then begin
 		RemoveRecord(i);
 		exit;
 	end;
@@ -456,106 +485,99 @@ begin
 	{ NON HUMAN ARMOUR } 
 	sRace := GetElementEditValueTrimmed(rec, 'RNAM - Race');
 	if (sRace = 'SuperMutantRace') then begin
-		sTag := '[SUPERMUTANT]';
+		PatchArmourInnr(rec, kDnClothes, kSuperMutant);									//sTag := '[SUPERMUTANT]';
 		exit;
 	end else if (sRace = 'DogmeatRace') or (HasKeyword(rec, 'ClothingDogmeat')) then begin
-		sTag := '[DOG]';
+		PatchArmourInnr(rec, kDnClothes, kDog);											//sTag := '[DOG]';
 		exit;
 	end;
+	
+	{ TODO : NEED A CHECK FOR VAULT SUITS FOR INNR }
+	{ TODO : CURRENTLY NO HAZMAT CHECK }
 	
 	eBodyFlags := ElementByPath(rec, 'BOD2 - Biped Body Template\First Person Flags');
 	if (ElementCount(eBodyFlags) = 1) then begin
 		{ SINGLE FLAG ARMOR PIECES }
 		if (HasBipedFlag(rec, '42 - [A] L Arm')) then begin
-			if HasKeyword(rec, 'ArmorTypePower') then
-				sTag := '[POWER ARMOR L ARM]'
-			else
-				sTag := '[ARMOR L ARM]';
+			if HasKeyword(rec, 'ArmorTypePower') then begin
+				PatchArmourInnr(rec, kDnPowerArmour, kPowerArmourLeftArm); 				//sTag := '[POWER ARMOR L ARM]';
+			end else begin
+				PatchArmourInnr(rec, kDnCommonArmour, kArmourLeftArm); 					//sTag := '[ARMOR L ARM]';
+			end;
 		end else if (HasBipedFlag(rec, '43 - [A] R Arm')) then begin
-			if HasKeyword(rec, 'ArmorTypePower') then
-				sTag := '[POWER ARMOR R ARM]'
-			else
-				sTag := '[ARMOR R ARM]';
+			if HasKeyword(rec, 'ArmorTypePower') then begin
+				PatchArmourInnr(rec, kDnPowerArmour, kPowerArmourRightArm); 			//sTag := '[POWER ARMOR R ARM]';
+			end else begin
+				PatchArmourInnr(rec, kDnCommonArmour, kArmourRightArm); 				//sTag := '[ARMOR R ARM]';
+			end;
 		end else if (HasBipedFlag(rec, '44 - [A] L Leg')) then begin
-			if HasKeyword(rec, 'ArmorTypePower') then
-				sTag := '[POWER ARMOR L LEG]'
-			else
-				sTag := '[ARMOR L LEG]';
+			if HasKeyword(rec, 'ArmorTypePower') then begin															
+				PatchArmourInnr(rec, kDnPowerArmour, kPowerArmourLeftLeg);				//sTag := '[POWER ARMOR L LEG]';
+			end else begin
+				PatchArmourInnr(rec, kDnCommonArmour, kArmourLeftLeg);					//sTag := '[ARMOR L LEG]';
+			end;
 		end else if (HasBipedFlag(rec, '45 - [A] R Leg')) then begin
-			if HasKeyword(rec, 'ArmorTypePower') then
-				sTag := '[POWER ARMOR R LEG]'
-			else
-				sTag := '[ARMOR R LEG]';
+			if HasKeyword(rec, 'ArmorTypePower') then begin
+				PatchArmourInnr(rec, kDnPowerArmour, kPowerArmourRightLeg); 			//sTag := '[POWER ARMOR R LEG]';
+			end else begin
+				PatchArmourInnr(rec, kDnCommonArmour, kArmourRightLeg);					//sTag := '[ARMOR R LEG]';
+			end;
 		end else if (HasBipedFlag(rec, '41 - [A] Torso')) then begin
 			if HasKeyword(rec, 'ArmorTypePower') then begin
-				sTag := '[POWER ARMOR TORSO]';
+				PatchArmourInnr(rec, kDnPowerArmour, kPowerArmourTorso);				//sTag := '[POWER ARMOR TORSO]';
 			end else if (ElementContainsStrFromList(rec, 'FULL - Name', tlArmourBackpackStrings)) then begin
-				sTag := '[BACKPACK]';
+				PatchArmourInnr(rec, kDnClothes, kBackpack);							//sTag := '[BACKPACK]';
 			end else begin
-				sTag := '[ARMOR TORSO]';
+				PatchArmourInnr(rec, kDnCommonArmour, kArmourTorso);					//sTag := '[ARMOR TORSO]';
 			end;
 		{ SINGLE FLAG CLOTHING PIECES }
 		end else if (HasBipedFlag(rec, '47 - Eyes')) then begin
-			if (ElementContainsStr(rec, 'FULL - Name', 'Mask')) then
-				sTag := '[MASK]'
-			else
-				sTag := '[EYEWEAR]';
+			if (ElementContainsStr(rec, 'FULL - Name', 'Mask')) then begin
+				PatchArmourInnr(rec, kDnClothes, kMask);								//sTag := '[MASK]';
+			end else begin
+				PatchArmourInnr(rec, kDnClothes, kEyewear);								//sTag := '[EYEWEAR]';
+			end;
 		end else if (HasBipedFlag(rec, '51 - Ring')) then begin
-			sTag := '[RING]';
+			PatchArmourInnr(rec, kDnClothes, kRing);									//sTag := '[RING]';
 		end else if (HasBipedFlag(rec, '30 - Hair Top')) or (HasBipedFlag(rec, '46 - Headband')) then begin
-			sTag := '[HAT]';
+			PatchArmourInnr(rec, kDnClothes, kHat);										//sTag := '[HAT]';
 		end else if (HasBipedFlag(rec, '54 - Unnamed')) then begin
-			sTag := '[BACKPACK]';
+			PatchArmourInnr(rec, kDnClothes, kBackpack);								//sTag := '[BACKPACK]';
 		end else if (HasBipedFlag(rec, '50 - Neck')) then begin
-			sTag := '[NECK]';
+			PatchArmourInnr(rec, kDnClothes, kRing);									//sTag := '[NECK]';
+		end else if (HasBipedFlag(rec, '33 - BODY')) then begin
+			if (GetElementEditValues(rec, 'FNAM - FNAM\Armor Rating') > 0) then begin
+				PatchArmourInnr(rec, kDnClothes, kFullArmour); 							//sTag := '[FULL ARMOR]';
+			end else begin
+				PatchArmourInnr(rec, kDnClothes, kClothes); 							//sTag := '[CLOTHING]';
+			end; 
 		end;
 		{ MULTIPLE FLAG PIECES }
 	end else begin
 		if (HasKeyword(rec, 'ArmorTypePower')) and (HasBipedFlag(rec, '52 - Scalp')) then begin
-			sTag := '[POWER ARMOR HELMET]';
+			PatchArmourInnr(rec, kDnPowerArmour, kPowerArmourHelmet);					//sTag := '[POWER ARMOR HELMET]';
 		end else if (HasBipedFlag(rec, '30 - Hair Top')) and not (HasBipedFlag(rec, '33 - BODY')) then begin
 			if (GetElementEditValues(rec, 'FNAM - FNAM\Armor Rating') > 0) then begin
-				sTag := '[HELMET]';
+				{ TODO : Should i split this? Check attach points for better suited INNR? can be both dnarmor and dn clothes }
+				PatchArmourInnr(rec, kDnCommonArmour, kHelmet);							//sTag := '[HELMET]';
 			end else begin
- 				sTag := '[HAT]';
+				PatchArmourInnr(rec, kDnClothes, kHat);									//sTag := '[HAT]';
 			end;
 		end else if (HasBipedFlag(rec, '33 - BODY')) then begin
-			if (IsAllBody(rec, 'U')) and not (IsAnyBody(rec, 'A')) then
-				sTag := '[UNDERARMOR]'
-			else if (GetElementEditValues(rec, 'FNAM - FNAM\Armor Rating') > 0) then
-				sTag := '[ARMOR]'
-			else
-				sTag := '[CLOTHING]';
+			if (IsAllBody(rec, 'U')) and not (IsAnyBody(rec, 'A')) then begin
+				PatchArmourInnr(rec, kDnClothes, kUnderarmour);							//sTag := '[UNDERARMOR]';
+			end else if (GetElementEditValues(rec, 'FNAM - FNAM\Armor Rating') > 0) then begin
+				PatchArmourInnr(rec, kDnClothes, kFullArmour);							//sTag := '[ARMOR]';
+			end else begin
+				PatchArmourInnr(rec, kDnClothes, kClothes);								//sTag := '[CLOTHING]';
+			end;
 		end else if (IsAllBody(rec, 'A')) then begin
-			sTag := '[ARMOR TORSO]';
+			PatchArmourInnr(rec, kDnCommonArmour, kArmourTorso);						//sTag := '[ARMOR TORSO]';
 		end else if (IsMask(rec)) then begin
-			sTag := '[MASK]';
+			PatchArmourInnr(rec, kDnClothes, kMask);									//sTag := '[MASK]';
 		end;
 	end;
-	PatchArmourInnr(rec, kEyewear);
 end;
-
-procedure PatchArmourInnr(rec: IInterface; keyword: string);
-var
-	sInrd: string;
-	fArmorKeywords, kwdaEyewear: IInterface;
-	
-begin
-	sInrd := geev(rec, 'INRD');
-	AddInnrKey(rec, keyword);
-end;
-
-procedure AddInnrKey(rec: IInterface; keyword: string);
-var
-	eKeywords: IInterface;
-begin
-	{ TODO: Might want to check for discrepencies between existing tags and my filtered suggestions }
-	if not (HasKywd(rec, sDnKeywordsSS)) then begin
-		eKeywords := ElementByPath(rec, 'KWDA - Keywords');
-		SetEditValue(ElementAssign(eKeywords, HighInteger, nil, false), keyword);
-	end;
-end;
-
 
 procedure PatchAmmo(rec: IInterface);
 begin
@@ -653,8 +675,53 @@ end;
 {                                                Helper Functions                                                   }
 {===================================================================================================================}
 
+{ Patches the Instance Naming Records for Weapon and Armour. }
+procedure PatchArmourInnr(rec: IInterface; kINNR: variant; kDN: string);
+var
+	sInrd: string;
+	eInstanceNaming: IInterface;
+begin
+	if (HasKywd(rec, sDnKeywordsSS)) then
+		exit;
+		
+	eInstanceNaming := ElementBySignature(rec, 'INRD');
+	if not (Assigned(eInstanceNaming)) then begin
+		SetElementEditValues(rec, 'INRD', kINNR);
+	{TODO: Else ... Patch custom INNRs }
+	end;
+	
+	AddInnrKey(rec, kDN);
+	CreateOBTE(rec);
+end;
 
-{ Gets load order hex form id as string, input is local form ID }
+{ Adds dynamic name keyword to record's keyword list. }
+procedure AddInnrKey(rec: IInterface; kDN: string);
+var
+	eKeywords: IInterface;
+begin
+	{ TODO: Might want to check for discrepencies between existing tags and my filtered suggestions }
+	if not (HasKywd(rec, sDnKeywordsSS)) then begin
+		eKeywords := ElementByPath(rec, 'KWDA - Keywords');
+		SetEditValue(ElementAssign(eKeywords, HighInteger, nil, false), kDN);
+	end;
+end;
+
+{ Copies the Object Template from one of SS's clothing records to a new record }
+procedure CreateOBTE(rec: IInterface);
+var
+	eObjectTemplate, f: IInterface;
+begin
+	f := FileByName('Simplified Sorting.esp');
+	eObjectTemplate := ElementByName(rec, 'Object Template');
+	if (Assigned(eObjectTemplate)) then begin
+		exit;
+	end else begin
+		eObjectTemplate := ElementByName(RecordByFormID(f, rObteTemplate, false), 'Object Template');
+		wbCopyElementToRecord(eObjectTemplate, rec, true, true);
+	end;
+end;
+
+{ Gets load order hex form id as string, input is local form ID. }
 function GetHexFormID(id: variant): string;
 begin
 	Result := IntToHex(MasterCount(fSimplifiedSorting) * $01000000 + id, 8);
@@ -679,7 +746,6 @@ begin
 		Result := true
 	else 
 		Result := false;
-	
 end;
 
 { Checks if a piece of clothing covers all body parts, can check for 'A' (Armour) or 'U' (Underarmour) }
@@ -889,6 +955,7 @@ end;
 {                                                      GUI                                                          }
 {===================================================================================================================}
 
+{ mtefunctions: FileSelect. Changed to allow for my filtered list and have a default checked state }
 procedure ShowPluginSelect;
 const
 	spacing = 24;
